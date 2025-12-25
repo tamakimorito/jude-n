@@ -778,6 +778,7 @@
             
             const missedCallsList = [];
             const outgoingCalls = [];
+            const successfulIncomingCalls = [];
             
             // Process each row
             for (const row of dataRows) {
@@ -793,13 +794,23 @@
                 const outgoingFrom = String(row[3] || '').trim();
                 const outgoingToPhone = formatRawPhone(row[10]); // K列: 発信先の電話番号
                 
-                if (direction === '着信' && callResult === '放棄済み' && waitTime !== '--' && waitTime !== '') {
-                    missedCallsList.push({
-                        startTime,
-                        callerPhone,
-                        callQueue,
-                        startTimeDate: new Date(startTime.replace(/\//g, '-'))
-                    });
+                if (direction === '着信') {
+                    if (callResult === '放棄済み' && waitTime !== '--' && waitTime !== '') {
+                        missedCallsList.push({
+                            startTime,
+                            callerPhone,
+                            callQueue,
+                            startTimeDate: new Date(startTime.replace(/\//g, '-'))
+                        });
+                    } else if (callResult !== '放棄済み') {
+                        // 応答した着信（放棄済み以外）
+                        successfulIncomingCalls.push({
+                            startTime,
+                            callerPhone,
+                            callQueue,
+                            startTimeDate: new Date(startTime.replace(/\//g, '-'))
+                        });
+                    }
                 }
                 
                 if (direction === '発信') {
@@ -812,15 +823,27 @@
                 }
             }
             
-            // Check which missed calls were returned
+            // Check which missed calls were returned or answered later
             missedCalls = missedCallsList.filter(missed => {
+                // Check 1: Return calls (outgoing from us)
                 const returned = outgoingCalls.some(outgoing => {
                     const phonesMatch = normalizePhone(missed.callerPhone) === normalizePhone(outgoing.phone);
                     const queueMatch = missed.callQueue === outgoing.callQueue;
                     const timeOk = outgoing.startTimeDate >= missed.startTimeDate;
                     return phonesMatch && queueMatch && timeOk;
                 });
-                return !returned;
+                
+                if (returned) return false;
+
+                // Check 2: Redialed by customer and answered (incoming from them)
+                const redialedAndAnswered = successfulIncomingCalls.some(incoming => {
+                    const phonesMatch = normalizePhone(missed.callerPhone) === normalizePhone(incoming.callerPhone);
+                    const queueMatch = missed.callQueue === incoming.callQueue;
+                    const timeOk = incoming.startTimeDate >= missed.startTimeDate;
+                    return phonesMatch && queueMatch && timeOk;
+                });
+
+                return !redialedAndAnswered;
             });
             
             displayResults();
@@ -934,6 +957,7 @@
             
             const missedCallsList = [];
             const outgoingCalls = [];
+            const successfulIncomingCalls = [];
             
             // First pass: collect all calls
             for (const row of dataRows) {
@@ -948,13 +972,23 @@
                 const outgoingFrom = row[3] || ''; // D列: 発信元の名前（発信時のコールキュー）
                 const outgoingToPhone = row[10] || ''; // K列: 発信先の電話番号（折り返し先）
                 
-                if (direction === '着信' && callResult === '放棄済み' && waitTime !== '--' && waitTime !== '') {
-                    missedCallsList.push({
-                        startTime,
-                        callerPhone,
-                        callQueue,
-                        startTimeDate: new Date(startTime.replace(/\//g, '-'))
-                    });
+                if (direction === '着信') {
+                    if (callResult === '放棄済み' && waitTime !== '--' && waitTime !== '') {
+                        missedCallsList.push({
+                            startTime,
+                            callerPhone,
+                            callQueue,
+                            startTimeDate: new Date(startTime.replace(/\//g, '-'))
+                        });
+                    } else if (callResult !== '放棄済み') {
+                         // 応答した着信（放棄済み以外）
+                        successfulIncomingCalls.push({
+                            startTime,
+                            callerPhone,
+                            callQueue,
+                            startTimeDate: new Date(startTime.replace(/\//g, '-'))
+                        });
+                    }
                 }
                 
                 if (direction === '発信') {
@@ -967,9 +1001,9 @@
                 }
             }
             
-            // Second pass: check which missed calls were returned
+            // Second pass: check which missed calls were returned or answered later
             missedCalls = missedCallsList.filter(missed => {
-                // Check if there's a return call after this missed call
+                // Check 1: Return calls (outgoing from us)
                 const returned = outgoingCalls.some(outgoing => {
                     // Same phone number
                     const phonesMatch = normalizePhone(missed.callerPhone) === normalizePhone(outgoing.phone);
@@ -981,7 +1015,17 @@
                     return phonesMatch && queueMatch && timeOk;
                 });
                 
-                return !returned;
+                if (returned) return false;
+
+                // Check 2: Redialed by customer and answered (incoming from them)
+                const redialedAndAnswered = successfulIncomingCalls.some(incoming => {
+                    const phonesMatch = normalizePhone(missed.callerPhone) === normalizePhone(incoming.callerPhone);
+                    const queueMatch = missed.callQueue === incoming.callQueue;
+                    const timeOk = incoming.startTimeDate >= missed.startTimeDate;
+                    return phonesMatch && queueMatch && timeOk;
+                });
+                
+                return !redialedAndAnswered;
             });
             
             displayResults();
