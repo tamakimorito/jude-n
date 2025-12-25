@@ -791,7 +791,7 @@
                 const callResult = String(row[16] || '').trim();
                 const waitTime = String(row[18] || '').trim();
                 const outgoingFrom = String(row[3] || '').trim();
-                const outgoingToPhone = formatRawPhone(row[6]);
+                const outgoingToPhone = formatRawPhone(row[10]); // K列: 発信先の電話番号
                 
                 if (direction === '着信' && callResult === '放棄済み' && waitTime !== '--' && waitTime !== '') {
                     missedCallsList.push({
@@ -946,7 +946,7 @@
                 const callResult = row[16] || '';
                 const waitTime = row[18] || '';
                 const outgoingFrom = row[3] || ''; // D列: 発信元の名前（発信時のコールキュー）
-                const outgoingToPhone = row[6] || ''; // G列: 発信元の電話番号
+                const outgoingToPhone = row[10] || ''; // K列: 発信先の電話番号（折り返し先）
                 
                 if (direction === '着信' && callResult === '放棄済み' && waitTime !== '--' && waitTime !== '') {
                     missedCallsList.push({
