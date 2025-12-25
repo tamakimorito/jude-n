@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ジュデーン - 折り返し漏れ検知アプリ</title>
+    <meta name="description" content="Zoom Phoneのログから折り返し漏れを検知するアプリケーション">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel file support -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #1a1a1a;
+            --bg-tertiary: #2a2a2a;
+            --accent-red: #e63946;
+            --accent-orange: #ff6b35;
+            --accent-glow: rgba(230, 57, 70, 0.4);
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --text-muted: #666666;
+            --border-color: #3a3a3a;
+            --success: #2ecc71;
+            --warning: #f1c40f;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+            padding: 1rem 2rem;
+            border-bottom: 2px solid var(--accent-red);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            position: relative;
+        }
+
+        .logo-icon svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 0 10px var(--accent-red));
+        }
+
+        .app-title {
+            font-size: 2rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--accent-red), var(--accent-orange));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+            letter-spacing: 0.1em;
+        }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .section {
+            margin-bottom: 2rem;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-number {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--accent-red);
+            font-weight: 700;
+        }
+
+        .section-number svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            color: var(--accent-red);
+            font-weight: 700;
+        }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            background: var(--bg-secondary);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .drop-zone::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, transparent 0%, rgba(230, 57, 70, 0.05) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: var(--accent-red);
+            box-shadow: 0 0 30px var(--accent-glow);
+        }
+
+        .drop-zone:hover::before,
+        .drop-zone.drag-over::before {
+            opacity: 1;
+        }
+
+        .drop-zone-icon {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .drop-zone-icon svg {
+            width: 48px;
+            height: 48px;
+        }
+
+        .drop-zone-text {
+            color: var(--accent-red);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .drop-zone-subtext {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        /* File Info */
+        .file-info {
+            display: none;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .file-info.show {
+            display: flex;
+        }
+
+        .file-info-icon svg {
+            width: 32px;
+            height: 32px;
+            color: var(--success);
+        }
+
+        .file-info-details {
+            flex: 1;
+        }
+
+        .file-info-name {
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .file-info-size {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .file-remove-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0.5rem;
+            transition: color 0.2s;
+        }
+
+        .file-remove-btn:hover {
+            color: var(--accent-red);
+        }
+
+        /* Results Section */
+        .results-section {
+            display: none;
+        }
+
+        .results-section.show {
+            display: block;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .results-count {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .results-count-badge {
+            background: linear-gradient(135deg, var(--accent-red), var(--accent-orange));
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.875rem;
+        }
+
+        .copy-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(135deg, var(--accent-red), var(--accent-orange));
+            border: none;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .copy-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px var(--accent-glow);
+        }
+
+        .copy-btn:active {
+            transform: translateY(0);
+        }
+
+        .copy-btn.copied {
+            background: var(--success);
+        }
+
+        .copy-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Results Table */
+        .results-table-container {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .results-table th {
+            background: var(--bg-tertiary);
+            font-weight: 700;
+            color: var(--accent-red);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .results-table tbody tr {
+            transition: background 0.2s;
+        }
+
+        .results-table tbody tr:hover {
+            background: rgba(230, 57, 70, 0.1);
+        }
+
+        .results-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .phone-number {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            color: var(--accent-orange);
+        }
+
+        /* No Results */
+        .no-results {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .no-results-icon {
+            margin-bottom: 1rem;
+        }
+
+        .no-results-icon svg {
+            width: 64px;
+            height: 64px;
+            color: var(--success);
+        }
+
+        .no-results-text {
+            color: var(--success);
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-red);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Error */
+        .error-message {
+            display: none;
+            background: rgba(230, 57, 70, 0.2);
+            border: 1px solid var(--accent-red);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            color: var(--accent-red);
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 1.5rem;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        footer a {
+            color: var(--accent-red);
+            text-decoration: none;
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--success);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast-icon svg {
+            width: 24px;
+            height: 24px;
+            color: var(--success);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            header {
+                padding: 1rem;
+            }
+
+            .app-title {
+                font-size: 1.5rem;
+            }
+
+            main {
+                padding: 1rem;
+            }
+
+            .drop-zone {
+                padding: 2rem 1rem;
+            }
+
+            .results-header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .copy-btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .results-table th,
+            .results-table td {
+                padding: 0.75rem;
+                font-size: 0.9rem;
+            }
+        }
+
+        /* Animation for kaiju theme */
+        @keyframes glow {
+            0%, 100% {
+                box-shadow: 0 0 5px var(--accent-red), 0 0 10px var(--accent-red);
+            }
+            50% {
+                box-shadow: 0 0 20px var(--accent-red), 0 0 30px var(--accent-orange);
+            }
+        }
+
+        .header-content .logo-icon svg {
+            animation: glow 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo-icon">
+                <!-- Monster/Kaiju inspired icon -->
+                <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="24" cy="24" r="20" fill="#e63946"/>
+                    <circle cx="17" cy="20" r="4" fill="white"/>
+                    <circle cx="31" cy="20" r="4" fill="white"/>
+                    <circle cx="17" cy="21" r="2" fill="#0a0a0a"/>
+                    <circle cx="31" cy="21" r="2" fill="#0a0a0a"/>
+                    <path d="M14 32 Q24 40 34 32" stroke="#0a0a0a" stroke-width="3" stroke-linecap="round" fill="none"/>
+                    <path d="M12 12 L16 18" stroke="#e63946" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M36 12 L32 18" stroke="#e63946" stroke-width="2" stroke-linecap="round"/>
+                    <polygon points="20,30 22,34 18,34" fill="white"/>
+                    <polygon points="28,30 30,34 26,34" fill="white"/>
+                    <polygon points="24,31 26,35 22,35" fill="white"/>
+                </svg>
+            </div>
+            <h1 class="app-title">ジュデーン</h1>
+        </div>
+    </header>
+
+    <main>
+        <!-- Upload Section -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-number">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <path d="M12 8v8M8 12h8"/>
+                    </svg>
+                </div>
+                <h2 class="section-title">1. CSVファイルをアップロード</h2>
+            </div>
+
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                </div>
+                <p class="drop-zone-text">ここにファイルをドラッグ＆ドロップ</p>
+                <p class="drop-zone-subtext">またはクリックしてファイルを選択</p>
+                <p class="drop-zone-subtext" style="margin-top: 0.5rem;">CSV または Excel(.xlsx)ファイルに対応</p>
+                <input type="file" class="file-input" id="fileInput" accept=".csv,.xlsx,.xls">
+            </div>
+
+            <div class="file-info" id="fileInfo">
+                <div class="file-info-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 12l2 2 4-4"/>
+                        <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                </div>
+                <div class="file-info-details">
+                    <div class="file-info-name" id="fileName"></div>
+                    <div class="file-info-size" id="fileSize"></div>
+                </div>
+                <button class="file-remove-btn" id="removeFileBtn" title="ファイルを削除">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>解析中...</p>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="section results-section" id="resultsSection">
+            <div class="section-header">
+                <div class="section-number">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                </div>
+                <h2 class="section-title">2. 折り返し漏れ一覧</h2>
+            </div>
+
+            <div class="results-header">
+                <div class="results-count">
+                    <span>未折り返し件数:</span>
+                    <span class="results-count-badge" id="resultsCountBadge">0</span>
+                </div>
+                <button class="copy-btn" id="copyBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                    <span id="copyBtnText">クリップボードにコピー</span>
+                </button>
+            </div>
+
+            <div class="results-table-container">
+                <table class="results-table" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>開始時間</th>
+                            <th>発信元電話番号</th>
+                            <th>コールキュー</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="no-results" id="noResults" style="display: none;">
+                <div class="no-results-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 12l2 2 4-4"/>
+                        <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                </div>
+                <p class="no-results-text">すべて折り返し済み！</p>
+                <p>未対応の不在着信はありません。</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        ©タマシステム 2025
+    </footer>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <div class="toast-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 12l2 2 4-4"/>
+                <circle cx="12" cy="12" r="10"/>
+            </svg>
+        </div>
+        <span id="toastMessage">クリップボードにコピーしました</span>
+    </div>
+
+    <script>
+        // DOM Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const removeFileBtn = document.getElementById('removeFileBtn');
+        const errorMessage = document.getElementById('errorMessage');
+        const loading = document.getElementById('loading');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsCountBadge = document.getElementById('resultsCountBadge');
+        const resultsBody = document.getElementById('resultsBody');
+        const noResults = document.getElementById('noResults');
+        const copyBtn = document.getElementById('copyBtn');
+        const copyBtnText = document.getElementById('copyBtnText');
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+
+        let missedCalls = [];
+
+        // Event Listeners
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+        removeFileBtn.addEventListener('click', resetUpload);
+        copyBtn.addEventListener('click', copyToClipboard);
+
+        // Drag and Drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const fileName = files[0].name.toLowerCase();
+                if (fileName.endsWith('.csv') || fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                    processFile(files[0]);
+                } else {
+                    showError('CSVまたはExcelファイルをアップロードしてください。');
+                }
+            }
+        });
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                processFile(file);
+            }
+        }
+
+        function processFile(file) {
+            hideError();
+            showLoading();
+            
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.add('show');
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const arrayBuffer = e.target.result;
+                    const fileNameLower = file.name.toLowerCase();
+                    
+                    if (fileNameLower.endsWith('.xlsx') || fileNameLower.endsWith('.xls')) {
+                        // Process Excel file using SheetJS
+                        processExcelFile(arrayBuffer);
+                    } else {
+                        // Process CSV file
+                        const text = decodeCSV(arrayBuffer);
+                        analyzeCSV(text);
+                    }
+                } catch (err) {
+                    showError('ファイルの読み込みに失敗しました: ' + err.message);
+                } finally {
+                    hideLoading();
+                }
+            };
+            reader.onerror = () => {
+                hideLoading();
+                showError('ファイルの読み込みに失敗しました。');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processExcelFile(arrayBuffer) {
+            try {
+                // Use SheetJS to read Excel file
+                const workbook = XLSX.read(arrayBuffer, { 
+                    type: 'array',
+                    cellText: false,  // Get raw values, not formatted text
+                    cellNF: true      // Keep number formats
+                });
+                
+                // Get first sheet
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                
+                // Convert to array of arrays, getting raw values for numbers
+                const rows = XLSX.utils.sheet_to_json(worksheet, { 
+                    header: 1,
+                    raw: true,  // Get raw numeric values instead of formatted strings
+                    defval: ''
+                });
+                
+                if (rows.length < 2) {
+                    showError('Excelファイルにデータがありません。');
+                    return;
+                }
+                
+                // Analyze the Excel data directly
+                analyzeExcelData(rows);
+            } catch (err) {
+                showError('Excelファイルの解析に失敗しました: ' + err.message);
+            }
+        }
+
+        function analyzeExcelData(rows) {
+            // Skip header row
+            const dataRows = rows.slice(1);
+            
+            const missedCallsList = [];
+            const outgoingCalls = [];
+            
+            // Process each row
+            for (const row of dataRows) {
+                if (row.length < 19) continue;
+                
+                const direction = String(row[1] || '').trim();
+                // Get raw numeric value and convert to string properly
+                const callerPhone = formatRawPhone(row[6]);
+                const callQueue = String(row[7] || '').trim();
+                const startTime = String(row[14] || '').trim();
+                const callResult = String(row[16] || '').trim();
+                const waitTime = String(row[18] || '').trim();
+                const outgoingFrom = String(row[3] || '').trim();
+                const outgoingToPhone = formatRawPhone(row[6]);
+                
+                if (direction === '着信' && callResult === '放棄済み' && waitTime !== '--' && waitTime !== '') {
+                    missedCallsList.push({
+                        startTime,
+                        callerPhone,
+                        callQueue,
+                        startTimeDate: new Date(startTime.replace(/\//g, '-'))
+                    });
+                }
+                
+                if (direction === '発信') {
+                    outgoingCalls.push({
+                        startTime,
+                        phone: outgoingToPhone,
+                        callQueue: outgoingFrom,
+                        startTimeDate: new Date(startTime.replace(/\//g, '-'))
+                    });
+                }
+            }
+            
+            // Check which missed calls were returned
+            missedCalls = missedCallsList.filter(missed => {
+                const returned = outgoingCalls.some(outgoing => {
+                    const phonesMatch = normalizePhone(missed.callerPhone) === normalizePhone(outgoing.phone);
+                    const queueMatch = missed.callQueue === outgoing.callQueue;
+                    const timeOk = outgoing.startTimeDate >= missed.startTimeDate;
+                    return phonesMatch && queueMatch && timeOk;
+                });
+                return !returned;
+            });
+            
+            displayResults();
+        }
+
+        function formatRawPhone(value) {
+            // Handle raw numeric values from Excel
+            if (value === null || value === undefined || value === '') return '';
+            
+            // If it's a number, convert to string without scientific notation
+            if (typeof value === 'number') {
+                // Use Number.prototype.toFixed() to avoid scientific notation
+                // For large integers, this preserves precision
+                if (Number.isInteger(value)) {
+                    return value.toString();
+                } else {
+                    // Handle floating point (shouldn't happen for phone numbers)
+                    return Math.round(value).toString();
+                }
+            }
+            
+            return String(value);
+        }
+
+        function decodeCSV(arrayBuffer) {
+            // Try different encodings
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            // Try UTF-8 first
+            try {
+                const decoder = new TextDecoder('utf-8', { fatal: true });
+                return decoder.decode(uint8Array);
+            } catch (e) {
+                // Not UTF-8, try Shift_JIS
+            }
+            
+            // Try Shift_JIS / CP932
+            try {
+                const decoder = new TextDecoder('shift_jis', { fatal: false });
+                return decoder.decode(uint8Array);
+            } catch (e) {
+                // Fallback to ISO-8859-1
+                const decoder = new TextDecoder('iso-8859-1');
+                return decoder.decode(uint8Array);
+            }
+        }
+
+        function parseCSV(text) {
+            const lines = text.split(/\r?\n/);
+            const result = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const row = parseCSVLine(line);
+                result.push(row);
+            }
+            
+            return result;
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                const nextChar = line[i + 1];
+                
+                if (char === '"') {
+                    if (inQuotes && nextChar === '"') {
+                        current += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            
+            return result;
+        }
+
+        function analyzeCSV(text) {
+            const rows = parseCSV(text);
+            
+            if (rows.length < 2) {
+                showError('CSVファイルにデータがありません。');
+                return;
+            }
+
+            // Skip header row
+            const dataRows = rows.slice(1);
+            
+            // Find missed calls (放棄済み)
+            // Columns (0-indexed):
+            // 1: 通話方向 (B)
+            // 6: 発信元の電話番号 (G)
+            // 7: 発信先の名前 (H) - コールキュー for incoming calls
+            // 14: 開始時間 (O)
+            // 16: 通話結果 (Q)
+            // 18: 待機時間 (S)
+            // 3: 発信元の名前 (D) - コールキュー for outgoing calls
+            
+            const missedCallsList = [];
+            const outgoingCalls = [];
+            
+            // First pass: collect all calls
+            for (const row of dataRows) {
+                if (row.length < 19) continue;
+                
+                const direction = row[1] || '';
+                const callerPhone = row[6] || '';
+                const callQueue = row[7] || ''; // H列: 発信先の名前（着信時のコールキュー）
+                const startTime = row[14] || '';
+                const callResult = row[16] || '';
+                const waitTime = row[18] || '';
+                const outgoingFrom = row[3] || ''; // D列: 発信元の名前（発信時のコールキュー）
+                const outgoingToPhone = row[6] || ''; // G列: 発信元の電話番号
+                
+                if (direction === '着信' && callResult === '放棄済み' && waitTime !== '--' && waitTime !== '') {
+                    missedCallsList.push({
+                        startTime,
+                        callerPhone,
+                        callQueue,
+                        startTimeDate: new Date(startTime.replace(/\//g, '-'))
+                    });
+                }
+                
+                if (direction === '発信') {
+                    outgoingCalls.push({
+                        startTime,
+                        phone: outgoingToPhone,
+                        callQueue: outgoingFrom,
+                        startTimeDate: new Date(startTime.replace(/\//g, '-'))
+                    });
+                }
+            }
+            
+            // Second pass: check which missed calls were returned
+            missedCalls = missedCallsList.filter(missed => {
+                // Check if there's a return call after this missed call
+                const returned = outgoingCalls.some(outgoing => {
+                    // Same phone number
+                    const phonesMatch = normalizePhone(missed.callerPhone) === normalizePhone(outgoing.phone);
+                    // Same call queue
+                    const queueMatch = missed.callQueue === outgoing.callQueue;
+                    // Outgoing call is after missed call
+                    const timeOk = outgoing.startTimeDate >= missed.startTimeDate;
+                    
+                    return phonesMatch && queueMatch && timeOk;
+                });
+                
+                return !returned;
+            });
+            
+            displayResults();
+        }
+
+        function normalizePhone(phone) {
+            // Handle scientific notation (e.g., 8.19049E+11 -> 819049...)
+            if (!phone) return '';
+            
+            let normalized = String(phone).trim();
+            
+            // Check if it's in scientific notation
+            if (/[eE][+\-]?\d+/.test(normalized)) {
+                try {
+                    // Use Number and toFixed to convert scientific notation
+                    // This handles numbers like 8.19049E+11 properly
+                    const num = parseFloat(normalized);
+                    if (!isNaN(num) && isFinite(num)) {
+                        // toFixed(0) gives us the integer without scientific notation
+                        // But we need to handle large numbers carefully
+                        if (num >= 1e15) {
+                            // For very large numbers, use BigInt approach
+                            normalized = BigInt(Math.round(num)).toString();
+                        } else {
+                            // For numbers within safe range, use toFixed
+                            normalized = num.toFixed(0);
+                        }
+                    }
+                } catch (e) {
+                    // Keep original if parsing fails
+                }
+            }
+            
+            // Remove all non-numeric characters and normalize
+            return normalized.replace(/[^\d]/g, '');
+        }
+
+        function formatPhoneNumber(phone) {
+            // Convert 81 prefix to 0
+            let formatted = normalizePhone(phone);
+            if (formatted.startsWith('81')) {
+                formatted = '0' + formatted.slice(2);
+            }
+            
+            // Add hyphens based on length and patterns
+            // 携帯電話・IP電話 (090, 080, 070, 050) : 11桁 -> 000-0000-0000
+            if (/^(0[5789]0)(\d{4})(\d{4})$/.test(formatted)) {
+                return formatted.replace(/^(0[5789]0)(\d{4})(\d{4})$/, '$1-$2-$3');
+            }
+            // フリーダイヤル (0120) : 10桁 -> 0120-000-000
+            if (/^(0120)(\d{3})(\d{3})$/.test(formatted)) {
+                return formatted.replace(/^(0120)(\d{3})(\d{3})$/, '$1-$2-$3');
+            }
+            // 東京・大阪 (03, 06) : 10桁 -> 03-0000-0000
+            if (/^(0[36])(\d{4})(\d{4})$/.test(formatted)) {
+                return formatted.replace(/^(0[36])(\d{4})(\d{4})$/, '$1-$2-$3');
+            }
+            // その他固定電話 (10桁) : 簡易的に 000-000-0000 とする
+            if (/^(\d{3})(\d{3})(\d{4})$/.test(formatted) && formatted.length === 10) {
+                return formatted.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
+            }
+            
+            return formatted;
+        }
+
+        function displayResults() {
+            resultsSection.classList.add('show');
+            resultsCountBadge.textContent = missedCalls.length;
+            
+            if (missedCalls.length === 0) {
+                document.querySelector('.results-table-container').style.display = 'none';
+                document.querySelector('.results-header .copy-btn').style.display = 'none';
+                noResults.style.display = 'block';
+            } else {
+                document.querySelector('.results-table-container').style.display = 'block';
+                document.querySelector('.results-header .copy-btn').style.display = 'flex';
+                noResults.style.display = 'none';
+                
+                resultsBody.innerHTML = missedCalls.map(call => `
+                    <tr>
+                        <td>${escapeHtml(call.startTime)}</td>
+                        <td class="phone-number">${escapeHtml(formatPhoneNumber(call.callerPhone))}</td>
+                        <td>${escapeHtml(call.callQueue)}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        function copyToClipboard() {
+            if (missedCalls.length === 0) return;
+            
+            // Create tab-separated data for Excel/Spreadsheet
+            const header = '開始時間\t発信元電話番号\tコールキュー';
+            const rows = missedCalls.map(call => 
+                `${call.startTime}\t${formatPhoneNumber(call.callerPhone)}\t${call.callQueue}`
+            );
+            const data = [header, ...rows].join('\n');
+            
+            navigator.clipboard.writeText(data).then(() => {
+                copyBtn.classList.add('copied');
+                copyBtnText.textContent = 'コピーしました！';
+                showToast('クリップボードにコピーしました');
+                
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    copyBtnText.textContent = 'クリップボードにコピー';
+                }, 2000);
+            }).catch(() => {
+                showError('コピーに失敗しました。');
+            });
+        }
+
+        function showToast(message) {
+            toastMessage.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function showLoading() {
+            loading.classList.add('show');
+        }
+
+        function hideLoading() {
+            loading.classList.remove('show');
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+        }
+
+        function hideError() {
+            errorMessage.classList.remove('show');
+        }
+
+        function resetUpload() {
+            fileInput.value = '';
+            fileInfo.classList.remove('show');
+            resultsSection.classList.remove('show');
+            missedCalls = [];
+            hideError();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
